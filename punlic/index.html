@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="icon" href="favicon.png" type="image/png">
+
+<title>Loja Vini</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+body {
+    margin:0;
+    font-family: Arial;
+    background:#0f0f0f;
+    color:#fff;
+}
+
+header {
+    background:#1a1a1a;
+    padding:15px;
+    display:flex;
+    justify-content:space-between;
+}
+
+.container {
+    padding:20px;
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+    gap:20px;
+}
+
+.produto {
+    background:#1c1c1c;
+    border-radius:12px;
+    overflow:hidden;
+}
+
+.produto img {
+    width:100%;
+    height:200px;
+    object-fit:cover;
+}
+
+.info {
+    padding:10px;
+}
+
+button {
+    width:100%;
+    padding:10px;
+    margin-top:10px;
+    border:none;
+    background:#00ff88;
+    cursor:pointer;
+    border-radius:8px;
+}
+
+#carrinho {
+    position:fixed;
+    right:0;
+    top:0;
+    width:300px;
+    height:100%;
+    background:#111;
+    padding:15px;
+    overflow:auto;
+}
+
+.item {
+    margin-bottom:10px;
+    border-bottom:1px solid #333;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <div>Minha Loja 🛒</div>
+    <div onclick="toggleCarrinho()">Carrinho (<span id="qtd">0</span>)</div>
+</header>
+
+<div class="container" id="produtos"></div>
+
+<div id="carrinho" style="display:none;">
+    <h3>Carrinho</h3>
+    <div id="lista"></div>
+    <h4>Total: R$ <span id="total">0</span></h4>
+    <input id="nomeCliente" placeholder="Seu nome" style="width:100%;padding:8px;">
+    <button onclick="finalizar()">Finalizar Pedido</button>
+</div>
+
+<script>
+const supabase = window.supabase.createClient(
+    "SUA_URL",
+    "SUA_ANON_KEY"
+);
+
+let carrinho = [];
+
+function toggleCarrinho(){
+    const c = document.getElementById("carrinho");
+    c.style.display = c.style.display === "none" ? "block" : "none";
+}
+
+async function carregarProdutos(){
+    const { data } = await supabase.from("produtos").select("*");
+
+    const container = document.getElementById("produtos");
+
+    data.forEach(p => {
+        container.innerHTML += `
+        <div class="produto">
+            <img src="${p.imagem}">
+            <div class="info">
+                <b>${p.nome}</b>
+                <div>R$ ${p.preco}</div>
+                <small>${p.descricao}</small>
+                <button onclick='addCarrinho(${JSON.stringify(p)})'>
+                    Comprar
+                </button>
+            </div>
+        </div>
+        `;
+    });
+}
+
+function addCarrinho(produto){
+    carrinho.push(produto);
+    atualizarCarrinho();
+}
+
+function atualizarCarrinho(){
+    const lista = document.getElementById("lista");
+    lista.innerHTML = "";
+
+    let total = 0;
+
+    carrinho.forEach(item => {
+        total += Number(item.preco);
+
+        lista.innerHTML += `
+        <div class="item">
+            ${item.nome} - R$ ${item.preco}
+        </div>
+        `;
+    });
+
+    document.getElementById("total").innerText = total.toFixed(2);
+    document.getElementById("qtd").innerText = carrinho.length;
+}
+
+async function finalizar(){
+    const nome = document.getElementById("nomeCliente").value;
+
+    if(carrinho.length === 0) return alert("Carrinho vazio");
+    if(!nome) return alert("Digite seu nome");
+
+    let total = carrinho.reduce((s, i)=> s + Number(i.preco), 0);
+
+    // cria pedido
+    const { data: pedido } = await supabase
+        .from("pedidos")
+        .insert([{ cliente_nome: nome, total }])
+        .select()
+        .single();
+
+    // insere itens
+    const itens = carrinho.map(i => ({
+        pedido_id: pedido.id,
+        produto_id: i.id,
+        quantidade: 1
+    }));
+
+    await supabase.from("itens_pedido").insert(itens);
+
+    alert("Pedido realizado 🔥");
+
+    carrinho = [];
+    atualizarCarrinho();
+}
+
+carregarProdutos();
+</script>
+
+</body>
+</html>
